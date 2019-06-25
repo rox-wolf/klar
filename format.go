@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
+	"github.com/nlopes/slack"
 	"github.com/olekukonko/tablewriter"
 	"github.com/optiopay/klar/clair"
 )
@@ -29,9 +33,20 @@ func getSeverityStyle(status string) string {
 	return fmt.Sprintf(SeverityStyle["Unknown"], status)
 }
 
+// Return yellow or red color, depending on high vuln count.
+func colorSelector() (color string) {
+	if len(store["High"]) > 0 {
+		color = "danger"
+	} else {
+		color = "warning"
+	}
+	return
+}
+
 func standardFormat(conf *config, vs []*clair.Vulnerability) int {
 	vsNumber := 0
 	iteratePriorities(priorities[0], func(sev string) { fmt.Printf("%s: %d\n", sev, len(store[sev])) })
+
 	fmt.Printf("\n")
 
 	iteratePriorities(conf.ClairOutput, func(sev string) {
@@ -48,6 +63,40 @@ func standardFormat(conf *config, vs []*clair.Vulnerability) int {
 			}
 		}
 	})
+	return vsNumber
+}
+
+func slackFormat(conf *config, vs []*clair.Vulnerability) int {
+	var messg strings.Builder
+	vsNumber := 0
+
+	iteratePriorities(conf.ClairOutput, func(sev string) {
+		messg.WriteString(fmt.Sprintf("%s: %d\n", sev, len(store[sev])))
+		vsNumber += len(store[sev])
+	})
+
+	if vsNumber > 0 {
+
+		attachment := slack.Attachment{
+			Pretext:  fmt.Sprintf("*Image Name: [%s]*\n_Vulnerabilities found: %d_", conf.DockerConfig.ImageName, vsNumber),
+			Color:    colorSelector(),
+			Fallback: messg.String(),
+			Text:     messg.String(),
+			//Footer:     "clair scan",
+			//FooterIcon: "https://platform.slack-edge.com/img/default_application_icon.png",
+			Ts: json.Number(strconv.FormatInt(time.Now().Unix(), 10)),
+		}
+		msg := slack.WebhookMessage{
+			Attachments: []slack.Attachment{attachment},
+		}
+
+		err := slack.PostWebhook(conf.SlackWebhook, &msg)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+	}
+
 	return vsNumber
 }
 
