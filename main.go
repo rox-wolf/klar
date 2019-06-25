@@ -25,13 +25,19 @@ func main() {
 		fail("Invalid options: %s", err)
 	}
 
-	if !conf.JSONOutput {
+	silentOutput := !conf.JSONOutput && conf.FormatStyle != "slack"
+
+	if conf.SlackWebhook == "" {
+		fail("Slack Webhook URL environment variable is empty.")
+	}
+
+	if silentOutput {
 		fmt.Fprintf(os.Stderr, "clair timeout %s\n", conf.ClairTimeout)
 		fmt.Fprintf(os.Stderr, "docker timeout: %s\n", conf.DockerConfig.Timeout)
 	}
 	whitelist := &vulnerabilitiesWhitelist{}
 	if conf.WhiteListFile != "" {
-		if !conf.JSONOutput {
+		if silentOutput {
 			fmt.Fprintf(os.Stderr, "whitelist file: %s\n", conf.WhiteListFile)
 		}
 		whitelist, err = parseWhitelistFile(conf.WhiteListFile)
@@ -39,7 +45,7 @@ func main() {
 			fail("Could not parse whitelist file: %s", err)
 		}
 	} else {
-		if !conf.JSONOutput {
+		if silentOutput {
 			fmt.Fprintf(os.Stderr, "no whitelist file\n")
 		}
 	}
@@ -61,7 +67,7 @@ func main() {
 	if len(image.FsLayers) == 0 {
 		fail("Can't pull fsLayers")
 	} else {
-		if conf.JSONOutput {
+		if !silentOutput {
 			output.LayerCount = len(image.FsLayers)
 		} else {
 			fmt.Printf("Analysing %d layers\n", len(image.FsLayers))
@@ -75,7 +81,7 @@ func main() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to analyze using API v%d: %s\n", ver, err)
 		} else {
-			if !conf.JSONOutput {
+			if silentOutput {
 				fmt.Printf("Got results from Clair API v%d\n", ver)
 			}
 			break
@@ -99,11 +105,16 @@ func main() {
 			//display how many vulnerabilities were whitelisted
 			fmt.Printf("Whitelisted %d vulnerabilities\n", numVulnerabilites-numVulnerabilitiesAfterWhitelist)
 		}
-		fmt.Printf("Found %d vulnerabilities\n", len(vs))
 		switch style := conf.FormatStyle; style {
+		case "slack":
+			if len(vs) > 0 {
+				vsNumber = slackFormat(conf, vs)
+			}
 		case "table":
+			fmt.Printf("Found %d vulnerabilities\n", len(vs))
 			vsNumber = tableFormat(conf, vs)
 		default:
+			fmt.Printf("Found %d vulnerabilities\n", len(vs))
 			vsNumber = standardFormat(conf, vs)
 		}
 	}

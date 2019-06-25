@@ -45,10 +45,11 @@ const (
 	optionRegistryInsecure   = "REGISTRY_INSECURE"
 	optionWhiteListFile      = "WHITELIST_FILE"
 	optionIgnoreUnfixed      = "IGNORE_UNFIXED"
+	optionSlackWebhookURL    = "SLACK_WEBHOOK_URL"
 )
 
 var priorities = []string{"Unknown", "Negligible", "Low", "Medium", "High", "Critical", "Defcon1"}
-var formatTypes = []string{"standard", "json", "table"}
+var formatTypes = []string{"standard", "json", "table", "slack"}
 
 func parseOutputPriority() (string, error) {
 	clairOutput := priorities[0]
@@ -128,6 +129,7 @@ type config struct {
 	DockerConfig  docker.Config
 	WhiteListFile string
 	IgnoreUnfixed bool
+	SlackWebhook  string
 }
 
 func newConfig(args []string) (*config, error) {
@@ -169,6 +171,7 @@ func newConfig(args []string) (*config, error) {
 		IgnoreUnfixed: parseBoolOption(optionIgnoreUnfixed),
 		ClairTimeout:  time.Duration(clairTimeout) * time.Minute,
 		WhiteListFile: os.Getenv(optionWhiteListFile),
+		SlackWebhook:  os.Getenv(optionSlackWebhookURL),
 		DockerConfig: docker.Config{
 			ImageName:        args[1],
 			User:             os.Getenv(optionDockerUser),
